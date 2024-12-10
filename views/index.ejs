@@ -1,0 +1,534 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Registros INE</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <style>
+        /* Estilos personalizados */
+        body {
+            font-family: Arial, sans-serif;
+            padding: 20px;
+            margin: 0;
+            background-color: #f4f4f9;
+        }
+
+
+        /* Estilos básicos para el Modal */
+        .modal {
+            display: none;  /* El modal estará oculto por defecto */
+            position: fixed; 
+            z-index: 1; /* Queda por encima de otros elementos */
+            left: 0;
+            top: 0;
+            width: 100%; /* Full screen */
+            height: 100%; /* Full screen */
+            overflow: auto; /* Si el contenido es mayor, aparecerá scroll */
+            background-color: rgba(0, 0, 0, 0.4); /* Fondo oscuro semitransparente */
+        }
+
+        /* Estilo del contenido del Modal */
+        .modal-content {
+            background-color: #fff;
+            margin: 15% auto;
+            padding: 20px;
+            border: 1px solid #888;
+            width: 80%; /* Puedes cambiar el tamaño según lo necesites */
+            max-width: 500px;
+        }
+
+        /* Estilo para el botón de cierre */
+        .close {
+            color: #aaa;
+            font-size: 28px;
+            font-weight: bold;
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            cursor: pointer;
+        }
+
+        .close:hover,
+        .close:focus {
+            color: black;
+            text-decoration: none;
+        }
+
+        h1, h2 {
+            text-align: center;
+        }
+
+        .form-container {
+            margin: 20px 0;
+            background-color: #fff;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        .form-container form {
+            display: grid;
+            gap: 15px;
+        }
+
+        .grid-container {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 20px;
+        }
+
+        .grid-container div {
+            margin-bottom: 10px;
+        }
+
+        input[type="text"], input[type="number"], input[type="date"], input[type="time"] {
+            width: 100%;
+            padding: 8px;
+            margin-top: 5px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+
+        button {
+            padding: 10px 15px;
+            background-color: #007BFF;
+            color: white;
+            border: none;
+            cursor: pointer;
+            border-radius: 4px;
+            font-size: 16px;
+        }
+
+        button:hover {
+            background-color: #0056b3;
+        }
+
+        .table-container {
+            margin-top: 40px;
+            background-color: #fff;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+
+        table, th, td {
+            border: 1px solid #ddd;
+        }
+
+        th, td {
+            padding: 12px 15px;
+            text-align: left;
+        }
+
+        th {
+            background-color: #f8f9fa;
+        }
+
+        #map {
+            height: 400px;
+            margin-top: 40px;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        /* Estilos para el botón de inicio de sesión en la parte superior derecha */
+        .login-button {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            background-color: #28a745;
+            color: white;
+            padding: 10px 15px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+
+        .login-button:hover {
+            background-color: #218838;
+        }
+
+        .close {
+        color: #aaa;
+        font-size: 28px;
+        font-weight: bold;
+        cursor: pointer;
+        position: absolute;
+        top: 10px;
+        right: 10px;
+    }
+
+    .close:hover,
+    .close:focus {
+        color: black;
+        text-decoration: none;
+        cursor: pointer;
+    }
+
+
+    </style>
+</head>
+<body>
+ <!-- Botón para abrir la ventana emergente -->
+ <button id="adminBtn" class="btn btn-primary">Admin</button>
+ <input type="text" id="nombreCompletoInput" placeholder="Nombre y apellidos">
+ <button onclick="filtrarRegistros()">Buscar</button>
+ 
+ <div id="registrosContainer"></div>
+ 
+ <!-- Ventana emergente para login -->
+ <div id="loginModal" class="modal">
+     <div class="modal-content">
+         <span class="close">&times;</span>
+         <h2>Iniciar Sesión</h2>
+         <form id="loginForm" method="POST">
+             <label for="username">Usuario:</label>
+             <input type="text" name="username" id="username" required>
+             <label for="password">Contraseña:</label>
+             <input type="password" name="password" id="password" required>
+                <button type="submit">Iniciar Sesión</button>
+         </form>
+         <p id="error-message" style="color: red; display: none;"></p>
+     </div>
+ </div>
+
+ <!-- Botón "Administrar" que aparecerá si el login es exitoso -->
+    <a href="/admin">
+        <button id="adminDashboardBtn" class="btn btn-success" style="display: none;">Administrar</button>
+    </a>
+
+ <script>
+     // Obtener los elementos del DOM
+     const modal = document.getElementById("loginModal");
+     const openModalBtn = document.getElementById("adminBtn");
+     const closeModalBtn = document.getElementsByClassName("close")[0];
+     const loginForm = document.getElementById("loginForm");
+     const adminDashboardBtn = document.getElementById("adminDashboardBtn");
+     const errorMessage = document.getElementById("error-message");
+
+     // Función para abrir el modal
+     openModalBtn.addEventListener("click", function() {
+         modal.style.display = "block";
+     });
+
+     // Función para cerrar el modal
+     closeModalBtn.addEventListener("click", function() {
+         modal.style.display = "none";
+     });
+
+     // Cerrar el modal si se hace clic fuera de él
+     window.addEventListener("click", function(event) {
+         if (event.target === modal) {
+             modal.style.display = "none";
+         }
+     });
+
+     document.getElementById('loginForm').addEventListener('submit', async (event) => {
+        event.preventDefault();
+
+        const username = document.getElementById('username').value;
+        const password = document.getElementById('password').value;
+
+        try {
+            const response = await fetch('/login', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ username, password }),
+            });
+
+            if (response.ok) {
+                alert('Inicio de sesión exitoso');
+                window.location.href = '/admin'; // Redirigir al panel de administración
+            } else {
+                alert('Credenciales incorrectas');
+            }
+        } catch (error) {
+            console.error('Error:', error);
+            alert('Error al conectar con el servidor.');
+        }
+    });
+     app.get('/pase', (req, res) => {
+    res.render('pase.ejs'); 
+    });
+    
+ </script>
+
+    <h1>Apartado INE</h1>
+    <div class="form-container">
+        <h2>Formulario de Registro</h2>
+        <form id="ineForm">
+            <div class="grid-container">
+                <div>
+                    <label for="nombre">Nombre</label>
+                    <input type="text" name="nombre" placeholder="Nombre" id="nombre" required>
+                </div>
+                <div>
+                    <label for="apellidos">Apellidos</label>
+                    <input type="text" name="apellidos" placeholder="Apellidos" id="apellidos" required>
+                </div>
+                <div>
+                    <label for="edad">Edad</label>
+                    <input type="number" name="edad" placeholder="Edad" id="edad" min="18" required>
+                </div>
+                <div>
+                    <label for="curp">CURP</label>
+                    <input type="text" name="curp" placeholder="CURP" id="curp" required>
+                </div>
+                <div>
+                    <label for="telefono">Teléfono</label>
+                    <input type="text" name="telefono" placeholder="Teléfono" id="telefono" required>
+                </div>
+                <div>
+                    <label for="estado">Estado</label>
+                    <input type="text" name="estado" placeholder="Estado" id="estado" required>
+                </div>
+                <div>
+                    <label for="municipio">Municipio</label>
+                    <input type="text" name="municipio" placeholder="Municipio" id="municipio" required>
+                </div>
+                <div>
+                    <label for="fecha">Fecha de Visita</label>
+                    <input type="date" name="fecha" id="fecha" required>
+                </div>
+                <div>
+                    <label for="hora">Hora de Visita</label>
+                    <input type="time" name="hora" id="hora" required min="08:00" max="14:00">
+                </div>
+            </div>
+            <button type="button" onclick="agregarRegistro()">Agregar Registro</button>
+            <button type="button" onclick="buscarOficina()">Buscar Oficina</button>
+        </form>
+    </div>
+    
+    <div id="map"></div>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script>
+
+        let map;
+        let oficinaLat = 19.432608;
+        let oficinaLon = -99.133209; 
+
+        function inicializarMapa() {
+            map = L.map('map').setView([oficinaLat, oficinaLon], 6);
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: '© OpenStreetMap contributors'
+            }).addTo(map);
+
+            L.marker([oficinaLat, oficinaLon]).addTo(map)
+                .bindPopup('Oficina del INE')
+                .openPopup();
+        }
+
+        function buscarOficina() {
+            const estado = document.getElementById('estado').value.trim();
+            const municipio = document.getElementById('municipio').value.trim();
+            if (estado && municipio) {
+                if (estado === "CDMX" && municipio === "CDMX") {
+                    oficinaLat = 19.432608;  
+                    oficinaLon = -99.133209; 
+                } else if (estado === "Nuevo León" && municipio === "Monterrey") {
+                    oficinaLat = 25.686614; 
+                    oficinaLon = -100.316113; 
+                } else if (estado === "Michoacan" && municipio === "Huetamo") {
+                    oficinaLat = 18.6233136;  
+                    oficinaLon = -100.895669;  
+                } else {
+                    alert("No se encontró ubicación para ese estado y municipio");
+                    return;
+                }
+
+                // Actualizar el campo de estado y municipio
+                document.getElementById('estado').value = estado;
+                document.getElementById('municipio').value = municipio;
+
+                // Actualizar la ubicación en el mapa
+                map.setView([oficinaLat, oficinaLon], 10);
+                L.marker([oficinaLat, oficinaLon]).addTo(map)
+                    .bindPopup('Oficina del INE')
+                    .openPopup();
+            } else {
+                alert("Por favor, ingrese el estado y municipio.");
+            }
+        }
+
+        async function agregarRegistro() {
+        const formData = new FormData(document.getElementById('ineForm'));
+        const datos = Object.fromEntries(formData.entries());
+
+        try {
+            const response = await fetch('http://localhost:3000/add', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(datos),
+            });
+
+            console.log('Respuesta del servidor:', response); // Verifica la respuesta del servidor
+
+            if (response.ok) {
+                alert("Registro agregado con éxito");
+                cargarRegistros();
+            } else {
+                const error = await response.json();
+                alert(`Error al agregar el registro: ${error.message}`);
+            }
+        } catch (error) {
+            console.error('Error:', error);
+            alert("Error al conectar con el servidor.");
+        }
+    }
+
+        // Función para modificar un registro
+        async function modificarRegistro(id) {
+            const nombre = prompt("Nuevo nombre:");
+            const apellidos = prompt("Nuevo apellidos:");
+            const edad = prompt("Nueva edad:");
+            const curp = prompt("Nuevo CURP:");
+            const telefono = prompt("Nuevo teléfono:");
+            const estado = prompt("Nuevo estado:");
+            const municipio = prompt("Nuevo municipio:");
+            const fecha = prompt("Nueva fecha:");
+            const hora = prompt("Nueva hora:");
+
+            if (!nombre || !apellidos || !edad || !curp || !telefono || !estado || !municipio || !fecha || !hora) {
+                alert("Por favor, complete todos los campos");
+                return;
+            }
+
+            const datos = {
+                id,
+                nombre,
+                apellidos,
+                edad,
+                curp,
+                telefono,
+                estado,
+                municipio,
+                fecha,
+                hora
+            };
+
+            try {
+                const response = await fetch(`http://localhost:3000/modificar/${id}`, {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(datos),
+                });
+
+                if (response.ok) {
+                    alert("Registro modificado con éxito");
+                    cargarRegistros();
+                } else {
+                    alert("Error al modificar el registro");
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                alert("Error al conectar con el servidor.");
+            }
+        }
+
+        // Función para eliminar un registro
+        async function eliminarRegistro(id) {
+        try {
+            const response = await fetch(`/delete/${id}`, { method: 'DELETE' });
+            const data = await response.json();
+
+            if (response.ok) {
+                alert(data.message);
+                filtrarRegistros(); // Vuelve a filtrar para actualizar la lista
+            } else {
+                alert(data.message);
+            }
+        } catch (error) {
+            console.error('Error al eliminar el registro:', error);
+        }
+    }
+
+        async function filtrarRegistros() {
+        const nombreCompleto = document.getElementById('nombreCompletoInput').value;
+
+        try {
+            const response = await fetch(`/filter?nombreCompleto=${encodeURIComponent(nombreCompleto)}`);
+            const data = await response.json();
+
+            if (response.ok) {
+                mostrarRegistros(data.registros); // Función para mostrar los registros en la interfaz
+            } else {
+                alert(data.message);
+            }
+        } catch (error) {
+            console.error('Error al filtrar registros:', error);
+        }
+    }
+
+function mostrarRegistros(registros) {
+    const contenedor = document.getElementById('registrosContainer');
+    contenedor.innerHTML = ''; // Limpia el contenedor
+
+    registros.forEach(registro => {
+        const registroDiv = document.createElement('div');
+        registroDiv.innerHTML = `
+            <p>${registro.nombreCompleto}</p>
+            <button onclick="eliminarRegistro('${registro._id}')">Eliminar</button>
+        `;
+        contenedor.appendChild(registroDiv);
+    });
+}
+
+
+        // Función para cargar los registros desde el servidor
+        async function cargarRegistros() {
+            try {
+                const response = await fetch('http://localhost:3000/registros');
+                const registros = await response.json();
+
+                const tbody = document.querySelector("#registrosTable tbody");
+                tbody.innerHTML = '';
+
+                registros.forEach(registro => {
+                    const row = document.createElement('tr');
+                    row.innerHTML = `
+                        <td>${registro.id}</td>
+                        <td>${registro.nombre}</td>
+                        <td>${registro.apellidos}</td>
+                        <td>${registro.edad}</td>
+                        <td>${registro.curp}</td>
+                        <td>${registro.telefono}</td>
+                        <td>${registro.estado}</td>
+                        <td>${registro.municipio}</td>
+                        <td>${registro.fecha}</td>
+                        <td>${registro.hora}</td>
+                        <td>
+                            <button onclick="modificarRegistro(${registro.id})">Modificar</button>
+                            <button onclick="eliminarRegistro(${registro.id})">Eliminar</button>
+                        </td>
+                    `;
+                    tbody.appendChild(row);
+                });
+            } catch (error) {
+                console.error('Error al cargar los registros:', error);
+            }
+        }
+
+        // Cargar registros iniciales
+        cargarRegistros();
+
+        // Inicializar mapa
+        inicializarMapa();
+    </script>
+   
+</body>
+</html>
